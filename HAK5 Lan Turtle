@@ -1,0 +1,19 @@
+let startTime = -10min;
+let endTime = 2min;
+let pnpConnections = 
+DeviceEvents
+| where ActionType == "PnpDeviceConnected"
+| extend parsed=parse_json(AdditionalFields)
+| extend PnpDeviceDescription=tostring(parsed.DeviceDescription), PnpClassName=tostring(parsed.ClassName)
+| where PnpDeviceDescription == "Realtek USB FE Family Controller"
+| project PnpTime = Timestamp, DeviceId, DeviceName, PnpDeviceDescription, PnpClassName;
+let ipChanges = 
+DeviceNetworkEvents
+| where LocalIPType == "Private"
+| where LocalIP !contains ":"
+| project IpTime = Timestamp, DeviceId, LocalIP, ReportId, Timestamp;
+pnpConnections
+| join kind=inner (ipChanges) on DeviceId 
+| where IpTime - PnpTime between (startTime .. endTime)
+| summarize arg_max(Timestamp, *) by DeviceId, LocalIP
+| project DeviceId, DeviceName, Timestamp, PnpDeviceDescription, PnpClassName, LocalIP, ReportId
